@@ -346,41 +346,34 @@ if not os.path.exists("custom_editor"):
 
                 const g = document.getElementById('g'); if(!g) return;
                 let down = false;
-                let isErasing = false; // 💡 Shiftキーで消しゴムモードかどうかの判定用
                 
+                // 💡 [安全な仕様] 誤操作を防ぐため、常に「選んでいるペン（selectedMode）」で上書きします
                 g.onmousedown = e => { 
                     const cell = e.target.closest('.c');
                     if(!cell) return; 
-                    
                     down = true; 
-                    // Shiftキーが押されていれば「0(消す)」、そうでなければ「選んでいるペン」
-                    isErasing = e.shiftKey; 
-                    window.upd(cell, isErasing ? 0 : selectedMode); 
+                    window.upd(cell, selectedMode); 
                 };
-                
                 g.onmouseover = e => { 
                     const cell = e.target.closest('.c');
                     if(down && cell) {
-                        window.upd(cell, isErasing ? 0 : selectedMode); 
+                        window.upd(cell, selectedMode); 
                     }
                 };
-                
-                window.onmouseup = () => { down = false; isErasing = false; isDraggingPalette = false; }; 
-                window.onmouseleave = () => { down = false; isErasing = false; isDraggingPalette = false; }; 
+                window.onmouseup = () => { down = false; isDraggingPalette = false; }; 
+                window.onmouseleave = () => { down = false; isDraggingPalette = false; }; 
 
-                // スマホのタップ操作（常に左クリック扱い、Shiftキーの概念はないので安全）
+                // スマホのタップ操作
                 g.addEventListener('touchstart', e => { 
                     const touch = e.touches[0]; 
                     const target = document.elementFromPoint(touch.clientX, touch.clientY); 
                     const cell = target ? target.closest('.c') : null;
                     if(cell) { 
                         down = true; 
-                        isErasing = false; // スマホは常に通常のペン
                         window.upd(cell, selectedMode); 
                         e.preventDefault(); 
                     } 
                 }, {passive: false});
-                
                 g.addEventListener('touchmove', e => { 
                     if(!down) return; 
                     const touch = e.touches[0]; 
@@ -389,8 +382,7 @@ if not os.path.exists("custom_editor"):
                     if(cell) window.upd(cell, selectedMode); 
                     e.preventDefault(); 
                 }, {passive: false});
-                
-                g.addEventListener('touchend', () => { down = false; isErasing = false; isDraggingPalette = false; });
+                g.addEventListener('touchend', () => { down = false; isDraggingPalette = false; });
                 
                 const btn = document.getElementById("submit-btn");
                 if(btn) { btn.onclick = () => { 
