@@ -12,7 +12,7 @@ import numpy as np
 st.set_page_config(page_title="日程調整サンプル for LINE", layout="wide")
 
 # 💡 ご自身のStreamlitアプリのURLに変更してください
-APP_BASE_URL = "https://tschedule-adjust-discord.streamlit.app/"
+APP_BASE_URL = "https://tschedule-adjustline.streamlit.app/"
 
 # ==========================================
 # UX改善: ロード中表示＆時間割テーブル用CSS
