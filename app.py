@@ -133,7 +133,6 @@ if not os.path.exists("options_editor"):
         window.addEventListener("message", function(event) {
             if (event.data.type === "streamlit:render") {
                 const args = event.data.args;
-                // 💡 saveTs（保存タイミング）を比較に加えて、保存後は確実に再描画する
                 if(window.lastEventId === args.eventId && window.lastSaveTs === args.saveTs) return; 
                 window.lastEventId = args.eventId;
                 window.lastSaveTs = args.saveTs;
@@ -337,13 +336,6 @@ if not os.path.exists("custom_editor"):
                 if(args.isClosed) { palette.style.display = 'none'; return; } 
                 else { palette.style.display = 'flex'; }
                 
-                // 💡 [徹底対策1] 小窓(iframe)全体の右クリックメニューを一番強い権限で強制ブロック
-                window.addEventListener('contextmenu', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return false;
-                }, { capture: true });
-
                 const g = document.getElementById('g'); if(!g) return;
                 let down = false;
                 
@@ -459,7 +451,6 @@ def main():
     if "app_initialized" not in st.session_state:
         st.session_state.app_initialized = True
 
-    # 💡 成功メッセージの表示（リロード後に出すための仕組みを追加）
     if st.session_state.get("save_success_msg"):
         st.toast(st.session_state.save_success_msg, icon="✅")
         st.session_state.save_success_msg = None
@@ -470,11 +461,9 @@ def main():
 
     if "auth" not in st.session_state: st.session_state.auth = None
     
-    # 💡 入学年度は「現在の西暦」から自動計算（現在の年の6年前〜1年後まで）
     current_year = datetime.now().year
     MASTER_G2 = [f"{year}年度" for year in range(current_year - 6, current_year + 2)]
     
-    # 💡 キャンパスとオプションはスプレッドシート(master_config)から取得
     config_res = call_gas_cached("get_config", method="POST", ttl=3600)
     if config_res.get("status") == "success":
         MASTER_G1 = config_res["data"]["g1"]
@@ -555,7 +544,7 @@ def main():
                                 st.error("氏名または合言葉が間違っています。")
                 
                 with st.expander("🆘 合言葉も忘れたので、管理者に依頼する"):
-                    st.write("管理者のDiscordへ通知を送り、PINのリセットを依頼します。")
+                    st.write("管理者のLINEへ通知を送り、PINのリセットを依頼します。")
                     req_name = st.text_input("あなたのお名前", key="req_pin_name")
                     if st.button("🚀 管理者にリセット依頼を送る", use_container_width=True):
                         if not req_name: st.warning("名前を入力してください。")
@@ -832,7 +821,7 @@ def main():
         with st.container(border=True):
             st.markdown("##### 🔒 プライバシー・通知設定")
             is_private = st.checkbox("🤫 プライベート調整にする（回答者の名前を他の参加者に隠す）", key="create_private")
-            skip_discord = st.checkbox("🔕 Discordに通知を送らない（ひっそり作成してURLで直接招待する）", value=False, key="skip_discord")
+            skip_line = st.checkbox("🔕 LINEに通知を送らない（ひっそり作成してURLで直接招待する）", value=False, key="skip_line")
 
         st.markdown("##### 📝 イベントの説明・備考")
         ev_desc_raw = rt_editor(key="desc_editor")
@@ -845,21 +834,6 @@ def main():
             elif ev_type == "options" and not any(o.strip() for o in opts_list): st.error("最低1つの候補を入力してください。")
             elif not is_all_members and target_scope_json == '{"groups": [], "users": []}': st.error("対象メンバーを指定するか、「全員に公開する」にチェックを入れてください。")
             else:
-                # 💡 Discord向けメンション設定
-                if is_all_members:
-                    mention_text = "@everyone"
-                else:
-                    mentions = []
-                    for g in t_g1:
-                        mentions.append(f"@{g}")
-                    for g in t_g2:
-                        mentions.append(f"@{g.replace('年度', '年度入学生')}")
-                    for g in t_g3:
-                        mentions.append(f"@{g}")
-                    
-                    mentions = list(dict.fromkeys(mentions))
-                    mention_text = " ".join(mentions)
-
                 deadline_str = f"{deadline_date.strftime('%Y-%m-%d')} {deadline_time.strftime('%H:%M')}"
                 payload = {
                     "title": ev_title, 
@@ -875,8 +849,8 @@ def main():
                     "auto_close": auto_close,
                     "target_scope": target_scope_json,
                     "is_private": is_private,
-                    "skip_discord": skip_discord,
-                    "mention_text": mention_text
+                    "skip_discord": skip_line, # GAS側で名前を変更していないためこのまま渡す
+                    "mention_text": "" # LINE通知では使用しないため空文字
                 }
                 res = call_gas("create_event", {"payload": payload}, method="POST")
                 clear_cache()
@@ -945,7 +919,7 @@ def main():
                 st.markdown("<style>.custom-tbl { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; } .custom-tbl th { background-color: #f0f2f6; padding: 10px; border-bottom: 2px solid #4CAF50; white-space: nowrap; } .custom-tbl td { padding: 10px; border-bottom: 1px solid #eee; word-break: break-all; }</style>" + f'<div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px;">{html_table_ev}</div>', unsafe_allow_html=True)
                 
                 st.markdown("---")
-                st.subheader("⚙️ ステータス手動変更")
+                st.subheader("⚙️ ステータス手手動変更")
                 if active_events:
                     with st.form("update_status_form"):
                         target_ev = st.selectbox("対象イベント", active_events, format_func=lambda x: f"{x['title']} ({x['status']})")
@@ -1063,30 +1037,23 @@ def main():
                     candidates = [u for u in all_users if u['user_id'] != user['user_id']]
                     new_top = st.selectbox("譲渡先ユーザー", candidates, format_func=lambda x: f"{x['name']} (ID: {x['user_id']})")
                     
-                    st.markdown("<span style='font-size:13px; color:#555;'>PINリセットなどのSOSを受け取るための、新しい管理者の<b>DiscordユーザーID（18桁前後の数字）</b>を入力してください。<br>※Discordの設定から「開発者モード」をオンにし、プロフィールを右クリックしてIDをコピーできます。</span>", unsafe_allow_html=True)
-                    new_discord_id = st.text_input("DiscordユーザーID (例: 123456789012345678)")
+                    # 💡 LINE特化の文言に変更
+                    st.markdown("<span style='font-size:13px; color:#555;'>※LINE連携のテストを行います。</span>", unsafe_allow_html=True)
                     
                     if st.button("🔔 テスト通知を送信"):
-                        if new_discord_id:
-                            clean_id = new_discord_id.strip().replace("@", "").replace("<", "").replace(">", "")
-                            mention_str = f"<@{clean_id}>"
-
-                            res = call_gas("test_discord_mention", {"payload": {"discord_id": mention_str}}, method="POST")
-                            if res.get("status") == "success":
-                                st.success(f"Discordにテスト通知を送信しました！通知が来ているか確認してください。")
-                            else:
-                                st.error("テスト通知の送信に失敗しました。")
+                        # GASの関数名はそのまま呼び出す（GAS側でLINE用に変更済み）
+                        res = call_gas("test_discord_mention", {"payload": {}}, method="POST")
+                        if res.get("status") == "success":
+                            st.success(f"LINEにテスト通知を送信しました！グループに通知が来ているか確認してください。")
                         else:
-                            st.warning("DiscordユーザーIDを入力してください。")
+                            st.error("テスト通知の送信に失敗しました。")
                     
-                    confirm_transfer = st.checkbox("✅ Discordでテスト通知が届いたことを確認しました")
+                    confirm_transfer = st.checkbox("✅ LINEでテスト通知が届いたことを確認しました")
                     
                     if confirm_transfer:
                         if st.button("🚀 top_adminを譲渡する", type="primary"):
-                            clean_id = new_discord_id.strip().replace("@", "").replace("<", "").replace(">", "")
-                            mention_str = f"<@{clean_id}>"
-                                
-                            call_gas("transfer_top_admin", {"payload": {"caller_id": user['user_id'], "target_id": new_top['user_id'], "discord_id": mention_str}}, method="POST")
+                            # GASの関数名はそのまま呼び出す
+                            call_gas("transfer_top_admin", {"payload": {"caller_id": user['user_id'], "target_id": new_top['user_id']}}, method="POST")
                             clear_cache()
                             st.session_state.auth = None
                             st.rerun()
@@ -1443,7 +1410,6 @@ def main():
             {submit_btn_html}
             """
             
-            # 💡 saveTs（保存タイミング）を渡すことでStreamlitに状態変更を教え、確実にボタンをリセットさせる
             raw = grid_editor(html_code=html_code, rows=len(time_labels), cols=len(date_strs), eventId=event['event_id'], isClosed=is_closed, unavailColRows=unavail_col_rows, saveTs=st.session_state.get("last_saved_ts", 0), default=None, key=f"editor_{event['event_id']}")
             
             if raw and isinstance(raw, dict) and "data" in raw:
@@ -1642,7 +1608,6 @@ def main():
             
             st.markdown("##### 📌 各候補の参加可否を選んでください")
             
-            # 💡 saveTs（保存タイミング）を渡すことで確実にリセットさせる
             raw = options_editor(options=opts, myAnsBin=my_ans_bin, myComment=my_comment, eventId=event['event_id'], isClosed=is_closed, saveTs=st.session_state.get("last_saved_ts", 0), key=f"opt_editor_{event['event_id']}")
             
             if raw and isinstance(raw, dict) and raw.get("trigger_save") and st.session_state.get("last_saved_ts") != raw.get("ts"):
